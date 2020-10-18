@@ -2,6 +2,18 @@ import sys, pygame, colorsys
 from math import e, log, log2, pi
 import multiprocessing as mp
 from multiprocessing import Pool
+from dataclasses import dataclass
+
+@dataclass
+class Parameters:
+    width: int
+    height: int
+    zoomLevel: int
+    rotation: int
+    xStep: int
+    yStep: int
+    xOffset: int
+    yOffset: int
 
 MAX_ITER = 50
 
@@ -30,101 +42,93 @@ def colourForIteration(iterationNumber):
 
     return c
 
-def plotrow(rowNumber, size, stepSize, zoomLevel, offset, rotation):
-    (width, height) = size
-    (xStep, yStep) = stepSize
-    (xOffset, yOffset) = offset
-    imaginaryNumber = ((1/height) * rowNumber * 2) -1
-    imaginaryNumber = (imaginaryNumber + yOffset) * (1/zoomLevel)
+def plotrow(rowNumber, parameters, rotation):
+    imaginaryNumber = ((1/parameters.height) * rowNumber * 2) -1
+    imaginaryNumber = (imaginaryNumber + parameters.yOffset) * (1/parameters.zoomLevel)
     pixels = []
-    for columnNumber in range(0,width,xStep):
-        realNumber = (((1/width) * columnNumber *3.5)-2.5 + xOffset)* (1/zoomLevel)
+    for columnNumber in range(0,parameters.width,parameters.xStep):
+        realNumber = (((1/parameters.width) * columnNumber *3.5)-2.5 + parameters.xOffset)* (1/parameters.zoomLevel)
         iterationNumber=inMandelbrot( rotation * complex(realNumber,imaginaryNumber))
         colour = colourForIteration(iterationNumber)
         pixels.append((colour,columnNumber,rowNumber))
         
     return pixels
 
-def draw(screen, size, zoomLevel, stepSize, offset, rotation):
-    (xStep, yStep) = stepSize
-    (width, height) = size
-    
-    r = e ** (complex(0,rotation * (pi/180)))
+def draw(screen, parameters):
+   
+    r = e ** (complex(0,parameters.rotation * (pi/180)))
 
-    # screen.fill(black)
-
-    # if xStep == 1:
     with Pool(processes=mp.cpu_count()) as pool:
-        rows = pool.starmap(plotrow, [(rowNumber, size, stepSize, zoomLevel, offset, r) for rowNumber in range(0, height, yStep)])
+        rows = pool.starmap(plotrow, [(rowNumber, parameters, r) for rowNumber in range(0, parameters.height, parameters.yStep)])
         for row in rows:
             for (colour,columnNumber,rowNumber) in row:
-                pygame.draw.rect(screen, colour, (columnNumber,rowNumber,xStep,yStep))        
-    # else:
-    #     for rowNumber in range(0, height, yStep):
-    #         results = plotrow(rowNumber, size, stepSize, zoomLevel, offset, r)
-    #         for (colour,columnNumber,rowNumber) in results:
-    #             pygame.draw.rect(screen, colour, (columnNumber,rowNumber,xStep,yStep))
+                pygame.draw.rect(screen, colour, (columnNumber,rowNumber,parameters.xStep,parameters.yStep))        
 
     pygame.display.flip()
+
+def useLowQuality(parameters):
+    parameters.xStep = 10
+    parameters.yStep = 10
+    return parameters
+
+def useHighQuality(parameters):
+    parameters.xStep = 1
+    parameters.yStep = 1
+    return parameters
 
 def main():
     pygame.init()
 
-    zoomLevel = 1
     size = width, height = 1500, 1000
     screen = pygame.display.set_mode(size)
-    stepSize = xStep, yStep = 10,10
-    offset = xOffset, yOffset = 0.0, 0.0
-    rotation = 0
 
-    draw(screen, size, zoomLevel, stepSize, offset, rotation)
+    parameters = Parameters(width = width, height = height, zoomLevel = 1, rotation = 0, xStep=10, yStep=10, xOffset=0, yOffset=0)
+    parameters = useLowQuality(parameters)
+
+    draw(screen, parameters)
 
     while (True):
         for event in pygame.event.get():
 
             if event.type == pygame.KEYDOWN:
                 if event.unicode == "+":
-                    zoomLevel+=1
-                    stepSize = xStep, yStep = 10, 10
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.zoomLevel+=1
+                    parameters = useLowQuality(parameters)
+                    draw(screen, parameters)
 
                 if event.unicode == "-":
-                    if zoomLevel > 1:
-                        zoomLevel-=1
-                        stepSize = xStep, yStep = 10, 10
-                        draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    if parameters.zoomLevel > 1:
+                        parameters.zoomLevel-=1
+                        parameters = useLowQuality(parameters)
+                        draw(screen, parameters)
 
                 if event.unicode == "h":
-                    stepSize = xStep, yStep = 1, 1
-                    draw(screen, size, zoomLevel, stepSize, offset, rotation)
+                    parameters = useHighQuality(parameters)
+                    draw(screen, parameters)
 
                 if event.key == pygame.K_LEFT: 
-                    (xOffset, yOffset) = offset
-                    offset = (xOffset - .1, yOffset)
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.xOffset -= .1
+                    draw(screen, parameters)
 
                 if event.key == pygame.K_RIGHT:  
-                    (xOffset, yOffset) = offset
-                    offset = (xOffset + .1, yOffset)
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.xOffset += .1
+                    draw(screen, parameters)
 
                 if event.key == pygame.K_UP: 
-                    (xOffset, yOffset) = offset
-                    offset = (xOffset, yOffset - .1)
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.yOffset -= .1
+                    draw(screen, parameters)
 
                 if event.key == pygame.K_DOWN: 
-                    (xOffset, yOffset) = offset
-                    offset = (xOffset, yOffset + .1)
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.yOffset += .1
+                    draw(screen, parameters)
 
                 if event.unicode == "c":
-                    rotation -= 10 % 360    
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.rotation -= 10 % 360    
+                    draw(screen, parameters)
 
                 if event.unicode == "u":
-                    rotation += 10 % 360    
-                    draw(screen, size,zoomLevel, stepSize, offset, rotation)
+                    parameters.rotation += 10 % 360    
+                    draw(screen, parameters)
 
             if event.type == pygame.QUIT:
                     pygame.quit(); sys.exit()
